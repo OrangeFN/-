@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>面杀大一统选将系统 - 极致原画版</title>
+    <style>
+        /* ================= 核心 UI 样式 ================= */
+        :root { --wei: #3f51b5; --shu: #f44336; --wu: #4caf50; --qun: #9e9e9e; --jin: #9c27b0; --shen: #ff9800; --primary: #d32f2f; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding-bottom: 80px; color: #333; }
+
+        /* 顶部导航与控制台 */
+        .header-panel { background: #fff; padding: 12px 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 50; }
+        .app-title { margin-bottom: 12px; text-align: center; font-size: 18px; color: var(--primary); font-weight: 900; letter-spacing: 1px;}
+
+        /* 库切换 Tab */
+        .server-tabs { display: flex; background: #f0f0f0; border-radius: 8px; padding: 4px; margin-bottom: 12px; }
+        .server-tab { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: #666; border-radius: 6px; transition: all 0.2s ease; font-weight: bold; cursor: pointer; }
+        .server-tab.active { background: #fff; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.08); transform: scale(1.02); }
+
+        /* 筛选控制区 */
+        .control-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .control-row select, .control-row input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; min-width: 0; background: #fafafa; outline: none; }
+        .control-row select:focus, .control-row input:focus { border-color: var(--primary); }
+
+        /* 按钮组 */
+        .btn-draw { width: 100%; padding: 12px; background: linear-gradient(135deg, #e53935, #b71c1c); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(178, 34, 34, 0.3); }
+        .btn-draw:active { transform: scale(0.98); }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap;}
+        .btn-flex { flex: 1; padding: 10px; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: bold; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .bg-teal { background: #009688; } .bg-blue { background: #1976d2; } .bg-grey { background: #757575; }
+
+        /* ================= 极致原画版：武将卡片网格 ================= */
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 10px; padding: 12px; }
+        .card { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; display: flex; flex-direction: column; text-align: center; cursor: pointer; border: 2px solid transparent; transition: transform 0.15s; }
+        .card.selected { border: 2px solid var(--primary); transform: translateY(-3px); box-shadow: 0 5px 15px rgba(211, 47, 47, 0.35); }
+        .card.selected::after { content: "✓"; position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); background: rgba(211, 47, 47, 0.95); color: white; font-size: 32px; border-radius: 50%; width: 46px; height: 46px; line-height: 46px; z-index: 10; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+
+        /* 标签与图片：采用标准卡牌 5:7 黄金比例，极大扩展原画面积 */
+        .tag-faction { position: absolute; top: 0; left: 0; color: white; padding: 2px 6px; font-size: 11px; font-weight: bold; border-bottom-right-radius: 6px; z-index: 2; box-shadow: 1px 1px 3px rgba(0,0,0,0.3);}
+        .tag-server { position: absolute; top: 0; right: 0; color: white; padding: 2px 6px; font-size: 10px; font-weight: bold; border-bottom-left-radius: 6px; z-index: 2; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px);}
+        .img-wrapper { width: 100%; aspect-ratio: 5/7; background: #f5f5f5; position: relative; border-bottom: 1px solid #eee; }
+        .card img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; opacity: 0; transition: opacity 0.3s; display: block; }
+        .card img.loaded { opacity: 1; }
+
+        /* 名字区域：极限压缩上下间距，留给原画最大空间 */
+        .card .name { font-size: 14px; font-weight: 900; padding: 5px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #111; line-height: 1.1;}
+        .card .version-sub { font-size: 10px; color: #888; padding-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.1; margin-top: -2px;}
+        .card .version-sub:empty { display: none; }
+
+        .bg-魏 { background-color: var(--wei); } .bg-蜀 { background-color: var(--shu); } .bg-吴 { background-color: var(--wu); } .bg-群 { background-color: var(--qun); } .bg-晋 { background-color: var(--jin); } .bg-神 { background-color: var(--shen); } .bg-未知 { background-color: #607d8b; }
+
+        /* 底部导航悬浮条调整为左右双按钮布局 */
+        .bottom-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 10px 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); display: flex; gap: 10px; z-index: 60; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+        .btn-bottom { padding: 12px; border: none; border-radius: 20px; font-size: 15px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: opacity 0.2s;}
+        .btn-bottom:disabled { opacity: 0.5; box-shadow: none; cursor: not-allowed; }
+
+        #btn-view { flex: 2; background: #4caf50; color: white; }
+        #btn-batch-recycle { flex: 1; background: var(--primary); color: white; }
+
+        /* 弹窗样式 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: flex-end; }
+        .modal-content { background: #fff; width: 100%; max-height: 90vh; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-header { padding: 15px 20px; background: #fff; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; border-radius: 20px 20px 0 0;}
+        .close-btn { width: 32px; height: 32px; background: #f5f5f5; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; color: #555; border: none; cursor: pointer;}
+        .modal-body { flex: 1; overflow-y: auto; padding: 15px 20px; background: #fafafa; padding-bottom: calc(20px + env(safe-area-inset-bottom));}
+
+        /* 技能详情区排版 */
+        .multi-gen-block { background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee; position: relative;}
+        .multi-gen-top { display: flex; gap: 15px; margin-bottom: 12px; align-items: flex-start;}
+        .multi-gen-img { width: 90px; height: 120px; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);}
+        .info-area { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-right: 30px;}
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: white; margin-right: 6px; margin-bottom: 6px; font-weight: bold; }
+        .badge-server { background: #455a64; }
+        .skill-item { margin-top: 10px; background: #f8f9fa; padding: 10px; border-radius: 8px; border-left: 4px solid var(--primary); }
+        .skill-name { font-weight: bold; font-size: 15px; color: #111; margin-bottom: 4px; }
+        .skill-desc { font-size: 14px; color: #555; line-height: 1.6; text-align: justify; }
+
+        .pool-management-area { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee; display: flex; flex-wrap: wrap; gap: 8px; }
+        .pool-tag { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; cursor: pointer; border: 1px solid var(--primary); background: transparent; color: var(--primary); transition: all 0.2s;}
+        .pool-tag-in { background: var(--primary); color: white; }
+
+        .loading-screen { padding: 50px 20px; text-align: center; color: #888; grid-column: 1/-1; line-height: 1.8;}
+    </style>
+
+    <script src="generals_data.js"></script>
+</head>
+<body>
+    <div class="header-panel" id="main-controls">
+        <h3 class="app-title">📱 面杀大一统选将系统</h3>
+
+        <div class="server-tabs" id="serverTabs">
+            <div class="server-tab active" onclick="switchLibrary('总库')">全服总库</div>
+            <div class="server-tab" onclick="switchLibrary('十周年')">十周年</div>
+            <div class="server-tab" onclick="switchLibrary('ol')">ol版</div>
+            <div class="server-tab" onclick="switchLibrary('移动版')">移动版</div>
+        </div>
+
+        <div class="control-row">
+            <select id="pool-select" onchange="browseGenerals()"><option value="all">未选择将池</option></select>
+            <select id="faction-filter" onchange="browseGenerals()">
+                <option value="all">全势力</option>
+                <option value="魏">魏</option><option value="蜀">蜀</option>
+                <option value="吴">吴</option><option value="群">群</option>
+                <option value="晋">晋</option><option value="神">神</option>
+            </select>
+            <select id="version-filter" onchange="browseGenerals()">
+                <option value="all">全形态</option>
+            </select>
+        </div>
+
+        <div class="control-row">
+            <input type="text" id="search-input" placeholder="🔍 搜武将 (如: 曹爽)" onkeyup="liveSearch()">
+            <input type="number" id="draw-count" placeholder="抽取量" value="8" style="max-width: 90px; text-align: center;">
+        </div>
+
+        <button class="btn-draw" id="btn-draw" onclick="drawGenerals()">🎲 随机抽取</button>
+        <div class="btn-group">
+            <button class="btn-flex bg-teal" id="btn-browse" onclick="browseGenerals()">📖 浏览武将</button>
+            <button class="btn-flex bg-blue" id="btn-pool" onclick="openPoolManager()">⚙️ 将池管理</button>
+            <button class="btn-flex bg-grey" id="btn-recycle" onclick="openRecycleBin()">🗑️ 回收站</button>
+        </div>
+
+        <div class="btn-group" style="margin-top: 8px;">
+            <button class="btn-flex" style="background-color: #ff9800; color: white;" onclick="selectAllCurrent()">☑️ 全选当前</button>
+            <button class="btn-flex" style="background-color: #9c27b0; color: white;" onclick="invertSelectionCurrent()">🔄 反选当前</button>
+            <button class="btn-flex" style="background-color: #607d8b; color: white;" onclick="clearSelection()">✖️ 取消选择</button>
+        </div>
+    </div>
+
+    <div class="grid-container" id="display-grid">
+        <div class="loading-screen">正在准备战场...</div>
+    </div>
+
+    <div class="bottom-bar">
+        <button class="btn-bottom" id="btn-view" disabled onclick="viewSelected()">查看与收录 (0)</button>
+        <button class="btn-bottom" id="btn-batch-recycle" disabled onclick="batchMoveToRecycleBin()">批量拉黑</button>
+    </div>
+
+    <div class="modal-overlay" id="detail-modal" onclick="if(event.target===this) closeModal('detail-modal')">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin: 0; font-size: 18px;" id="modal-title">武将详情</h3>
+                <button class="close-btn" onclick="closeModal('detail-modal')">×</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="pool-modal" onclick="if(event.target===this) closeModal('pool-modal')">
+        <div class="modal-content" style="max-height: 80vh;">
+            <div class="modal-header">
+                <h3 style="margin: 0; font-size: 18px;">将池管理</h3>
+                <button class="close-btn" onclick="closeModal('pool-modal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex; gap:10px; margin-bottom:20px;">
+                    <input type="text" id="new-pool-name" placeholder="输入将池名称 (如: 极速局)" style="flex:1; padding:12px; border:1px solid #ddd; border-radius:8px;">
+                    <button onclick="createNewPool()" style="padding:12px 15px; background:var(--primary); color:white; border:none; border-radius:8px; font-weight:bold;">创建</button>
+                </div>
+                <div id="pool-manager-list" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="recycle-modal" onclick="if(event.target===this) closeModal('recycle-modal')">
+        <div class="modal-content" style="max-height: 90vh;">
+            <div class="modal-header">
+                <h3 style="margin: 0; font-size: 18px; color: var(--primary);">🗑️ 回收站</h3>
+                <div style="display:flex; align-items:center;">
+                    <button onclick="restoreAllFromRecycleBin()" style="background:none; border:1px solid #4caf50; color:#4caf50; padding:4px 10px; border-radius:4px; font-size:12px; margin-right:12px; cursor:pointer;">全部恢复</button>
+                    <button class="close-btn" onclick="closeModal('recycle-modal')">×</button>
+                </div>
+            </div>
+
+            <div style="padding: 15px 20px 0; background: #fff;">
+                <div class="control-row">
+                    <select id="recycle-server" onchange="renderRecycleBin()">
+                        <option value="all">全服务器</option>
+                        <option value="十周年">十周年</option>
+                        <option value="ol">ol版</option>
+                        <option value="移动版">移动版</option>
+                    </select>
+                    <select id="recycle-faction" onchange="renderRecycleBin()">
+                        <option value="all">全势力</option>
+                        <option value="魏">魏</option><option value="蜀">蜀</option>
+                        <option value="吴">吴</option><option value="群">群</option>
+                        <option value="晋">晋</option><option value="神">神</option>
+                    </select>
+                </div>
+                <div class="control-row">
+                    <input type="text" id="recycle-search" placeholder="🔍 搜索冷宫武将..." onkeyup="renderRecycleBin()">
+                </div>
+            </div>
+
+            <div class="modal-body" id="recycle-manager-list" style="display:flex; flex-direction:column; gap:12px; border-top: 1px solid #f0f0f0;">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allMergedGenerals = [];
+        let currentLibraryFilter = '总库';
+        let currentDrawnGenerals = [];
+        let selectedGeneralIds = [];
+
+        let customPools = JSON.parse(localStorage.getItem('sgs_custom_pools_final')) || {};
+        let recycleBin = JSON.parse(localStorage.getItem('sgs_recycle_bin')) || [];
+
+        window.onload = () => {
+            const grid = document.getElementById('display-grid');
+            try {
+                if (typeof ALL_MERGED_GENERALS === 'undefined') {
+                    throw new Error("⚠️ 找不到数据！请确保 generals_data.js 文件和 index.html 放在同一个文件夹内。");
+                }
+                if (ALL_MERGED_GENERALS.length === 0) {
+                    throw new Error("⚠️ 数据库是空的，请重新运行合并脚本！");
+                }
+
+                allMergedGenerals = ALL_MERGED_GENERALS;
+                refreshPoolSelect();
+                switchLibrary('总库');
+            } catch (error) {
+                document.getElementById('main-controls').style.pointerEvents = 'none';
+                document.getElementById('main-controls').style.opacity = '0.5';
+                grid.innerHTML = `<div class="loading-screen" style="color:var(--primary); font-size:16px;"><b>🛑 启动失败</b><br><br>${error.message}</div>`;
+                console.error(error);
+            }
+        };
+
+        function switchLibrary(libName) {
+            currentLibraryFilter = libName;
+            document.querySelectorAll('.server-tab').forEach(t => {
+                t.classList.remove('active');
+                if(t.innerText.includes(libName)) t.classList.add('active');
+            });
+            selectedGeneralIds = [];
+            updateBottomBar();
+            buildVersionFilter();
+            browseGenerals();
+        }
+
+        function buildVersionFilter() {
+            const select = document.getElementById('version-filter');
+            const versions = new Set();
+            let tempPool = currentLibraryFilter === '总库' ? allMergedGenerals : allMergedGenerals.filter(g => g.server === currentLibraryFilter);
+
+            tempPool.forEach(g => {
+                const match = g.name.match(/\((.*?)\)/);
+                versions.add(match ? match[1] : '经典版');
+            });
+
+            select.innerHTML = '<option value="all">全形态</option>';
+            [...versions].sort().forEach(v => {
+                select.innerHTML += `<option value="${v}">${v}</option>`;
+            });
+        }
+
+        function refreshPoolSelect() {
+            const select = document.getElementById('pool-select');
+            select.innerHTML = `<option value="all">【全量总将池】不限</option>`;
+            for (let pName in customPools) {
+                select.innerHTML += `<option value="${pName}">🌟 ${pName} (${customPools[pName].length}将)</option>`;
+            }
+        }
+
+        function getFilteredCandidates() {
+            const poolKey = document.getElementById('pool-select').value;
+            const faction = document.getElementById('faction-filter').value;
+            const version = document.getElementById('version-filter').value;
+            const keyword = document.getElementById('search-input').value.trim().toLowerCase();
+
+            let candidates = allMergedGenerals;
+
+            // 过滤掉回收站里的武将
+            candidates = candidates.filter(g => !recycleBin.includes(g.id));
+
+            if (currentLibraryFilter !== '总库') candidates = candidates.filter(g => g.server === currentLibraryFilter);
+            if (poolKey !== 'all') {
+                const allowedIds = customPools[poolKey] || [];
+                candidates = candidates.filter(g => allowedIds.includes(g.id));
+            }
+            if (faction !== 'all') candidates = candidates.filter(g => g.faction === faction);
+            if (version !== 'all') {
+                candidates = candidates.filter(g => {
+                    const vName = g.name.includes('(') ? g.name.match(/\((.*?)\)/)[1] : '经典版';
+                    return vName === version;
+                });
+            }
+            if (keyword) candidates = candidates.filter(g => g.name.toLowerCase().includes(keyword));
+
+            // 🚀 新增逻辑：强制按拼音顺序（名字）进行排序，取代原有的服务器顺序
+            candidates.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+
+            return candidates;
+        }
+
+        let searchTimeout;
+        function liveSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(browseGenerals, 300); }
+
+        function browseGenerals() {
+            currentDrawnGenerals = getFilteredCandidates();
+            renderGrid(currentDrawnGenerals);
+        }
+
+        function drawGenerals() {
+            let candidates = getFilteredCandidates();
+            if (candidates.length === 0) {
+                document.getElementById('display-grid').innerHTML = `<div class="loading-screen">当前条件下没有找到武将</div>`;
+                return;
+            }
+
+            let count = parseInt(document.getElementById('draw-count').value) || 8;
+            if (count > candidates.length) count = candidates.length;
+
+            let shuffled = [...candidates];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            currentDrawnGenerals = shuffled.slice(0, count);
+            selectedGeneralIds = [];
+            updateBottomBar();
+            renderGrid(currentDrawnGenerals);
+        }
+
+        function renderGrid(generalsList) {
+            const grid = document.getElementById('display-grid');
+            if (generalsList.length === 0) {
+                grid.innerHTML = '<div class="loading-screen">无匹配的武将</div>';
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            generalsList.forEach(g => {
+                const factionColor = g.faction ? `bg-${g.faction}` : 'bg-未知';
+                const isSelected = selectedGeneralIds.includes(g.id) ? 'selected' : '';
+                const baseName = g.name.split('(')[0];
+
+                const vName = g.name.includes('(') ? g.name.match(/\((.*?)\)/)[1] : '经典版';
+                const displayVName = vName === '经典版' ? '' : vName;
+
+                const card = document.createElement('div');
+                card.className = `card ${isSelected}`;
+                card.id = `card-${g.id}`;
+                card.onclick = () => toggleSelect(g.id);
+
+                let serverTagText = g.server === "移动版" ? "移动" : (g.server === "十周年" ? "十周年":"ol");
+
+                card.innerHTML = `
+                    <div class="tag-faction ${factionColor}">${g.faction}</div>
+                    <div class="tag-server">${serverTagText}</div>
+                    <div class="img-wrapper"><img src="${g.local_img_path || ''}" onload="this.classList.add('loaded')" onerror="this.src=''"></div>
+                    <div class="name">${baseName}</div>
+                    <div class="version-sub">${displayVName}</div>
+                `;
+                fragment.appendChild(card);
+            });
+            grid.innerHTML = '';
+            grid.appendChild(fragment);
+        }
+
+        function toggleSelect(id) {
+            const cardEl = document.getElementById(`card-${id}`);
+            if (!cardEl) return;
+            const idx = selectedGeneralIds.indexOf(id);
+            if (idx > -1) {
+                selectedGeneralIds.splice(idx, 1);
+                cardEl.classList.remove('selected');
+            } else {
+                selectedGeneralIds.push(id);
+                cardEl.classList.add('selected');
+            }
+            updateBottomBar();
+        }
+
+        function updateBottomBar() {
+            const btnView = document.getElementById('btn-view');
+            const btnRecycle = document.getElementById('btn-batch-recycle');
+            const count = selectedGeneralIds.length;
+
+            btnView.innerText = count > 0 ? `详情与收录 (${count})` : `点击卡片选择武将`;
+            btnView.disabled = count === 0;
+
+            btnRecycle.innerText = count > 0 ? `批量拉黑 (${count})` : `批量拉黑`;
+            btnRecycle.disabled = count === 0;
+        }
+
+        function viewSelected() {
+            if (selectedGeneralIds.length === 0) return;
+            const modalBody = document.getElementById('modal-body');
+            modalBody.innerHTML = '';
+            const selectedData = allMergedGenerals.filter(g => selectedGeneralIds.includes(g.id));
+            document.getElementById('modal-title').innerText = selectedData.length === 1 ? `武将详情` : `已选武将 (${selectedData.length})`;
+
+            let html = '';
+            selectedData.forEach(g => {
+                const factionColor = g.faction ? `bg-${g.faction}` : 'bg-未知';
+                const baseName = g.name.split('(')[0];
+
+                const vName = g.name.includes('(') ? g.name.match(/\((.*?)\)/)[1] : '经典版';
+                const displayVName = vName === '经典版' ? '' : `${vName} | `;
+
+                html += `
+                    <div class="multi-gen-block">
+                        <button onclick="moveToRecycleBin('${g.id}')" style="position:absolute; top:15px; right:15px; background:none; border:none; cursor:pointer; font-size:18px;" title="移入回收站">🗑️</button>
+                        <div class="multi-gen-top">
+                            <img class="multi-gen-img" src="${g.local_img_path}" onerror="this.src=''">
+                            <div class="info-area">
+                                <h4 style="margin: 0 0 6px 0; font-size: 18px; color:#111;">${baseName}</h4>
+                                <div><span class="badge ${factionColor}">${g.faction}</span><span class="badge badge-server">${g.server}</span><span class="badge" style="background:var(--primary);">${displayVName}体力: ${g.hp}</span></div>
+                            </div>
+                        </div>
+                `;
+
+                if (g.skills && g.skills.length > 0) {
+                    g.skills.forEach(s => { html += `<div class="skill-item"><div class="skill-name">【${s.name}】</div><div class="skill-desc">${s.desc}</div></div>`; });
+                } else {
+                    html += `<div class="skill-item"><div class="skill-desc">该形态无具体技能描述。</div></div>`;
+                }
+
+                html += `<div class="pool-management-area"><span style="font-size:13px; color:#888;">收录至将池：</span>`;
+                if(Object.keys(customPools).length === 0){
+                    html += `<span style="font-size:12px; color:#ccc;">暂无将池，请在主页创建</span>`;
+                } else {
+                    for(let pName in customPools) {
+                        const inPool = customPools[pName].includes(g.id);
+                        const tagClass = inPool ? 'pool-tag-in' : '';
+                        const icon = inPool ? '✓' : '＋';
+                        html += `<button class="pool-tag ${tagClass}" onclick="toggleGeneralInPool('${g.id}', '${pName}', this)">${icon} ${pName}</button>`;
+                    }
+                }
+                html += `</div></div>`;
+            });
+            modalBody.innerHTML = html;
+            document.getElementById('detail-modal').style.display = 'flex';
+        }
+
+        // ================= ☑️ 快捷选择逻辑 =================
+        function selectAllCurrent() {
+            if (!currentDrawnGenerals || currentDrawnGenerals.length === 0) return;
+
+            currentDrawnGenerals.forEach(g => {
+                if (!selectedGeneralIds.includes(g.id)) {
+                    selectedGeneralIds.push(g.id);
+                    const cardEl = document.getElementById(`card-${g.id}`);
+                    if (cardEl) cardEl.classList.add('selected');
+                }
+            });
+            updateBottomBar();
+        }
+
+        function invertSelectionCurrent() {
+            if (!currentDrawnGenerals || currentDrawnGenerals.length === 0) return;
+
+            currentDrawnGenerals.forEach(g => {
+                const idx = selectedGeneralIds.indexOf(g.id);
+                const cardEl = document.getElementById(`card-${g.id}`);
+
+                if (idx > -1) {
+                    selectedGeneralIds.splice(idx, 1);
+                    if (cardEl) cardEl.classList.remove('selected');
+                } else {
+                    selectedGeneralIds.push(g.id);
+                    if (cardEl) cardEl.classList.add('selected');
+                }
+            });
+            updateBottomBar();
+        }
+
+        function clearSelection() {
+            if (selectedGeneralIds.length === 0) return;
+
+            selectedGeneralIds = [];
+            document.querySelectorAll('.card.selected').forEach(card => card.classList.remove('selected'));
+            updateBottomBar();
+        }
+
+        // ================= 🗑️ 批量与单点回收站逻辑 =================
+
+        function moveToRecycleBin(id) {
+            if(!recycleBin.includes(id)) recycleBin.push(id);
+            localStorage.setItem('sgs_recycle_bin', JSON.stringify(recycleBin));
+
+            selectedGeneralIds = selectedGeneralIds.filter(gid => gid !== id);
+            closeModal('detail-modal');
+            browseGenerals();
+            updateBottomBar();
+        }
+
+        function batchMoveToRecycleBin() {
+            if(selectedGeneralIds.length === 0) return;
+
+            selectedGeneralIds.forEach(id => {
+                if(!recycleBin.includes(id)) {
+                    recycleBin.push(id);
+                }
+            });
+            localStorage.setItem('sgs_recycle_bin', JSON.stringify(recycleBin));
+
+            selectedGeneralIds = [];
+            updateBottomBar();
+            browseGenerals();
+        }
+
+        function openRecycleBin() {
+            document.getElementById('recycle-modal').style.display = 'flex';
+            renderRecycleBin();
+        }
+
+        function renderRecycleBin() {
+            const listDiv = document.getElementById('recycle-manager-list');
+            listDiv.innerHTML = '';
+
+            if (recycleBin.length === 0) {
+                listDiv.innerHTML = '<div style="text-align:center; padding:30px 20px; color:#999; background:#f9f9f9; border-radius:12px;">您的回收站空空如也，暂无屏蔽的武将。</div>';
+                return;
+            }
+
+            const sFilter = document.getElementById('recycle-server').value;
+            const fFilter = document.getElementById('recycle-faction').value;
+            const keyword = document.getElementById('recycle-search').value.trim().toLowerCase();
+
+            let binnedGenerals = allMergedGenerals.filter(g => recycleBin.includes(g.id));
+
+            if (sFilter !== 'all') binnedGenerals = binnedGenerals.filter(g => g.server === sFilter);
+            if (fFilter !== 'all') binnedGenerals = binnedGenerals.filter(g => g.faction === fFilter);
+            if (keyword) binnedGenerals = binnedGenerals.filter(g => g.name.toLowerCase().includes(keyword));
+
+            // 🚀 新增逻辑：回收站内的列表同样按拼音顺序排序
+            binnedGenerals.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+
+            if (binnedGenerals.length === 0) {
+                listDiv.innerHTML = '<div style="text-align:center; padding:30px 20px; color:#999; background:#f9f9f9; border-radius:12px;">未找到符合条件的屏蔽武将。</div>';
+                return;
+            }
+
+            binnedGenerals.forEach(g => {
+                const baseName = g.name.split('(')[0];
+                listDiv.innerHTML += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 15px; background:#f9f9f9; border-radius:8px; border:1px solid #eee;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <img src="${g.local_img_path}" style="width:40px; height:40px; object-fit:cover; border-radius:6px; opacity:0.6;" onerror="this.src=''">
+                            <div><b style="color:#555;">${baseName}</b> <span style="font-size:12px; color:#888;">(${g.server} | ${g.faction})</span></div>
+                        </div>
+                        <button style="background:#fff; color:#4caf50; border:1px solid #4caf50; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; transition:all 0.2s;" onclick="restoreFromRecycleBin('${g.id}')">恢复</button>
+                    </div>
+                `;
+            });
+        }
+
+        function restoreFromRecycleBin(id) {
+            recycleBin = recycleBin.filter(gid => gid !== id);
+            localStorage.setItem('sgs_recycle_bin', JSON.stringify(recycleBin));
+            renderRecycleBin();
+            browseGenerals();
+        }
+
+        function restoreAllFromRecycleBin() {
+            if(recycleBin.length === 0) return;
+            if(confirm("确定要将回收站里的所有武将全部释放出来吗？")) {
+                recycleBin = [];
+                localStorage.setItem('sgs_recycle_bin', JSON.stringify(recycleBin));
+                renderRecycleBin();
+                browseGenerals();
+            }
+        }
+
+        function toggleGeneralInPool(generalId, poolName, btnElement) {
+            let pool = customPools[poolName];
+            const idx = pool.indexOf(generalId);
+            if(idx > -1) {
+                pool.splice(idx, 1);
+                btnElement.className = 'pool-tag';
+                btnElement.innerHTML = `＋ ${poolName}`;
+            } else {
+                pool.push(generalId);
+                btnElement.className = 'pool-tag pool-tag-in';
+                btnElement.innerHTML = `✓ ${poolName}`;
+            }
+            localStorage.setItem('sgs_custom_pools_final', JSON.stringify(customPools));
+            refreshPoolSelect();
+        }
+
+        function openPoolManager() {
+            const listDiv = document.getElementById('pool-manager-list');
+            listDiv.innerHTML = '';
+            if (Object.keys(customPools).length === 0) {
+                listDiv.innerHTML = '<div style="text-align:center; padding:30px 20px; color:#999; background:#f9f9f9; border-radius:12px;">您还没有建立任何将池。<br><br><b>💡 玩法提示：</b><br>您可以将【十周年】和【移动版】的武将加入同一个将池，实现真正的时空大乱斗！</div>';
+            } else {
+                for (let poolName in customPools) {
+                    listDiv.innerHTML += `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:15px; background:#f9f9f9; border-radius:10px; border:1px solid #e0e0e0;">
+                            <div><b style="font-size:16px; color:#222;">${poolName}</b><br><span style="font-size:12px; color:#888;">已收录跨服武将：${customPools[poolName].length} 名</span></div>
+                            <button style="background:#fff; color:var(--primary); border:1px solid var(--primary); padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold;" onclick="deletePool('${poolName}')">删除</button>
+                        </div>
+                    `;
+                }
+            }
+            document.getElementById('pool-modal').style.display = 'flex';
+        }
+
+        function createNewPool() {
+            const name = document.getElementById('new-pool-name').value.trim();
+            if (!name || name === "all") return alert("将池名称不能为空或非法！");
+            if (customPools[name]) return alert("该将池名称已存在！");
+            customPools[name] = selectedGeneralIds.length > 0 ? [...selectedGeneralIds] : [];
+            localStorage.setItem('sgs_custom_pools_final', JSON.stringify(customPools));
+            document.getElementById('new-pool-name').value = '';
+            refreshPoolSelect();
+            openPoolManager();
+        }
+
+        function deletePool(poolName) {
+            if(confirm(`确定要解散将池【${poolName}】吗？\n(这只会删除将池，不会删除武将数据)`)){
+                delete customPools[poolName];
+                localStorage.setItem('sgs_custom_pools_final', JSON.stringify(customPools));
+                if(document.getElementById('pool-select').value === poolName) { document.getElementById('pool-select').value = 'all'; browseGenerals(); }
+                refreshPoolSelect();
+                openPoolManager();
+            }
+        }
+
+        function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
+    </script>
+</body>
+</html>
